@@ -51,6 +51,8 @@
 #include <moveit/planning_scene_interface/planning_scene_interface.h>
 #include <moveit_msgs/GetPositionIK.h>
 
+#include <discretized_movement/standard_parameter_names.h>
+
 class Discretized_Movement_Action
 {
   protected:
@@ -161,7 +163,6 @@ class Discretized_Interact_Action
 };
 
 
-//TODO
 bool goToPose(std::vector<double> pose,
               std::string planning_group,
               moveit::planning_interface::MoveGroupInterface& move_group)
@@ -232,9 +233,9 @@ class DiscretizedMovementParamServer
 
     std::vector<double> get_start_pose() {
       if(
-          nh.hasParam("start_pose_joint_states")
+          nh.hasParam(ROSPARAM_NAME_STARTPOSE_JOINTSTATE)
         ) {
-        nh.param("start_pose_joint_states", start_pose_joint_states);
+        nh.param(ROSPARAM_NAME_STARTPOSE_JOINTSTATE, start_pose_joint_states);
       } else {
         ROS_ERROR("Joint state parameter must be set. Aborting.");
         exit(1);
@@ -244,9 +245,9 @@ class DiscretizedMovementParamServer
 
     std::string get_group_name() {
       if(
-          nh.hasParam("group_name")
+          nh.hasParam(ROSPARAM_NAME_GROUP_NAME)
         ) {
-        nh.param("group_name", group_name);
+        nh.param(ROSPARAM_NAME_GROUP_NAME, group_name);
       } else {
         ROS_ERROR("group name parameter must be set. Aborting.");
         exit(1);
@@ -256,13 +257,13 @@ class DiscretizedMovementParamServer
 
     BoundingBox get_bounding_box() {
       double step_size, max_x, max_y, min_x, min_y, start_x, start_y;
-      nh.param("step_size",  step_size,  0.05);
-      nh.param("max_x",      max_x,      0.65);
-      nh.param("min_x",      min_x,      0.0);
-      nh.param("start_x",    start_x,    0.0);
-      nh.param("max_y",      max_y,      0.65);
-      nh.param("min_y",      min_y,      0.0);
-      nh.param("start_y",    start_y,    0.0);
+      nh.param(ROSPARAM_NAME_STEP_SIZE,  step_size,  0.05);
+      nh.param(ROSPARAM_NAME_MAX_X,      max_x,      0.65);
+      nh.param(ROSPARAM_NAME_MIN_X,      min_x,      0.0);
+      nh.param(ROSPARAM_NAME_START_X,    start_x,    0.0);
+      nh.param(ROSPARAM_NAME_MAX_Y,      max_y,      0.65);
+      nh.param(ROSPARAM_NAME_MIN_Y,      min_y,      0.0);
+      nh.param(ROSPARAM_NAME_START_Y,    start_y,    0.0);
 
       return BoundingBox(step_size, max_x, max_y, min_x, min_y, start_x, start_y);
 

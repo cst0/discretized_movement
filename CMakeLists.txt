@@ -38,6 +38,8 @@ generate_messages(DEPENDENCIES
 )
 
 catkin_package(
+  INCLUDE_DIRS
+  include
   CATKIN_DEPENDS
   actionlib_msgs
   message_generation
@@ -52,6 +54,7 @@ catkin_package(
 )
 
 include_directories(
+  include
   ${catkin_INCLUDE_DIRS}
   ${Boost_INCLUDE_DIR}
 )
