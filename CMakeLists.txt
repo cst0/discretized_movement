@@ -10,6 +10,11 @@ find_package(catkin REQUIRED COMPONENTS
   nav_msgs
   roscpp
   std_msgs
+  moveit_core
+  moveit_ros_planning
+  moveit_ros_move_group
+  moveit_ros_perception
+  moveit_ros_visualization
 )
 
 find_package(Boost REQUIRED COMPONENTS
@@ -39,6 +44,11 @@ catkin_package(
   message_runtime
   roscpp
   std_msgs
+  moveit_core
+  moveit_ros_planning
+  moveit_ros_move_group
+  moveit_ros_perception
+  moveit_ros_visualization
 )
 
 include_directories(

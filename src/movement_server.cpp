@@ -1,3 +1,9 @@
+/*
+ * TODO:
+ * -refactor main into more functions
+ * -refactor this into mulitple files
+ */
+
 /**
  * This code is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -31,6 +37,19 @@
 
 // message imports
 #include <discretized_movement/state.h>
+#include <sensor_msgs/JointState.h>
+
+// moveit stuff
+#include <moveit/move_group_interface/move_group_interface.h>
+#include <moveit/planning_scene_interface/planning_scene_interface.h>
+#include <moveit_msgs/DisplayRobotState.h>
+#include <moveit_msgs/DisplayTrajectory.h>
+#include <moveit_msgs/AttachedCollisionObject.h>
+#include <moveit_msgs/CollisionObject.h>
+
+#include <moveit/move_group_interface/move_group_interface.h>
+#include <moveit/planning_scene_interface/planning_scene_interface.h>
+#include <moveit_msgs/GetPositionIK.h>
 
 class Discretized_Movement_Action
 {
@@ -42,6 +61,7 @@ class Discretized_Movement_Action
     float step_size, goal_x, goal_y, current_x, current_y;
 
   public:
+
     Discretized_Movement_Action(std::string name, ros::NodeHandle nh) :
       MoveActionServer_(nh, name,
           boost::bind(&Discretized_Movement_Action::execute, this, _1),
@@ -92,6 +112,7 @@ class Discretized_Movement_Action
     }
 };
 
+
 class Discretized_Interact_Action
 {
   protected:
@@ -139,17 +160,137 @@ class Discretized_Interact_Action
     }
 };
 
-int main(int argc, char *argv[]) {
+
+//TODO
+bool goToPose(std::vector<double> pose,
+              std::string planning_group,
+              moveit::planning_interface::MoveGroupInterface& move_group)
+{
+  sensor_msgs::JointState msg;
+
+  moveit::core::RobotStatePtr current_state = move_group.getCurrentState();
+  std::vector<double> current_joint_positions;
+  current_state->copyJointGroupPositions(planning_group, current_joint_positions);
+
+  if(current_joint_positions.size() == pose.size()) {
+    move_group.setJointValueTarget(pose);
+    moveit::planning_interface::MoveGroupInterface::Plan plan;
+    return move_group.plan(plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS;
+  }
+  else {
+    ROS_ERROR("Cannot go to start pose: different number of actual joint states and goal states.");
+    return false;
+  }
+
+  return false;
+}
+
+
+class BoundingBox
+{
+  public:
+    double step_size, max_x, max_y, min_x, min_y, start_x, start_y;
+
+    BoundingBox(
+        double step_size_,
+        double max_x_,
+        double max_y_,
+        double min_x_,
+        double min_y_,
+        double start_x_,
+        double start_y_)
+    {
+      step_size = step_size_;
+      max_x     = max_x_;
+      max_y     = max_y_;
+      min_x     = min_x_;
+      min_y     = min_y_;
+      start_x   = start_x_;
+      start_y   = start_y_;
+    }
+
+    BoundingBox() {}
+};
+
+
+class DiscretizedMovementParamServer
+{
+  protected:
+    std::vector<double>       start_pose_joint_states;
+    std::string               group_name;
+    BoundingBox               bounding_box;
+    ros::NodeHandle           nh;
+
+  public:
+    DiscretizedMovementParamServer(ros::NodeHandle nh_)
+    {
+      this->nh = nh_;
+      bounding_box = get_bounding_box();
+    }
+
+    ~DiscretizedMovementParamServer() {}
+
+    std::vector<double> get_start_pose() {
+      if(
+          nh.hasParam("start_pose_joint_states")
+        ) {
+        nh.param("start_pose_joint_states", start_pose_joint_states);
+      } else {
+        ROS_ERROR("Joint state parameter must be set. Aborting.");
+        exit(1);
+      }
+      return start_pose_joint_states;
+    }
+
+    std::string get_group_name() {
+      if(
+          nh.hasParam("group_name")
+        ) {
+        nh.param("group_name", group_name);
+      } else {
+        ROS_ERROR("group name parameter must be set. Aborting.");
+        exit(1);
+      }
+      return group_name;
+    }
+
+    BoundingBox get_bounding_box() {
+      double step_size, max_x, max_y, min_x, min_y, start_x, start_y;
+      nh.param("step_size",  step_size,  0.05);
+      nh.param("max_x",      max_x,      0.65);
+      nh.param("min_x",      min_x,      0.0);
+      nh.param("start_x",    start_x,    0.0);
+      nh.param("max_y",      max_y,      0.65);
+      nh.param("min_y",      min_y,      0.0);
+      nh.param("start_y",    start_y,    0.0);
+
+      return BoundingBox(step_size, max_x, max_y, min_x, min_y, start_x, start_y);
+
+    }
+};
+
+
+int main(int argc, char *argv[])
+{
   ros::init(argc, argv, "simplified_kinematics");
   ros::NodeHandle nh;
   ROS_INFO("Starting up...");
-
-  ros::Rate loop_rate(10);
 
   Discretized_Movement_Action action_server("simplified_kinematics", nh);
   ROS_INFO("Movement action server is now running.");
   Discretized_Interact_Action interact_server("simplified_interaction", nh);
   ROS_INFO("Interaction action server is now running.");
+
+  ROS_INFO("Going to try going to the start pose...");
+  DiscretizedMovementParamServer param_server(nh);
+  moveit::planning_interface::MoveGroupInterface move_group(param_server.get_group_name());
+
+  if(!goToPose(param_server.get_start_pose(), param_server.get_group_name(), move_group)) {
+    ROS_ERROR("Unable to achieve start pose. Ending.");
+    exit(2);
+  }
+
+  ROS_INFO("The entire node is now ready.");
   ros::spin();
 
   ROS_INFO("Told to shut down. Goodbye!");
