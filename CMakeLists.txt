@@ -9,6 +9,7 @@ find_package(catkin REQUIRED COMPONENTS
   message_runtime
   nav_msgs
   roscpp
+  rospy
   std_msgs
   moveit_core
   moveit_ros_planning
@@ -24,7 +25,8 @@ find_package(Boost REQUIRED COMPONENTS
 add_message_files(FILES
   interact.msg
   movement.msg
-  state.msg
+  robotstate.msg
+  worldstate.msg
 )
 
 add_action_files(FILES
@@ -45,6 +47,7 @@ catkin_package(
   message_generation
   message_runtime
   roscpp
+  rospy
   std_msgs
   moveit_core
   moveit_ros_planning

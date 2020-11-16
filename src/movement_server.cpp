@@ -56,6 +56,7 @@
 class Discretized_Movement_Action
 {
   protected:
+
     actionlib::SimpleActionServer<discretized_movement::MoveAction> MoveActionServer_;
     std::string action_name_;
     discretized_movement::MoveFeedback feedback_;
@@ -77,7 +78,9 @@ class Discretized_Movement_Action
     MoveActionServer_.start();
   }
 
+
     ~Discretized_Movement_Action(void) {}
+
 
     void execute(const discretized_movement::MoveGoalConstPtr &goal) {
       ros::Rate r(1);
@@ -96,21 +99,21 @@ class Discretized_Movement_Action
         goal_y = feedback_.state.y - step_size;
       }
 
-      result_.success = attempt_move();
-      if(result_.success) {
+      bool success = attempt_move();
+      result_.success = success;
+      if(success) {
         feedback_.state.x = goal_x;
         feedback_.state.y = goal_y;
         MoveActionServer_.setSucceeded();
       } else {
         MoveActionServer_.setAborted();
       }
-
     }
 
     bool attempt_move() {
       //TODO
       ROS_ERROR("move function not implmeneted");
-      return false;
+      return true;
     }
 };
 
@@ -163,7 +166,7 @@ class Discretized_Interact_Action
 };
 
 
-bool goToPose(std::vector<double> pose,
+bool goToPose(std::map<std::string, double> pose,
               std::string planning_group,
               moveit::planning_interface::MoveGroupInterface& move_group)
 {
@@ -171,19 +174,17 @@ bool goToPose(std::vector<double> pose,
 
   moveit::core::RobotStatePtr current_state = move_group.getCurrentState();
   std::vector<double> current_joint_positions;
-  current_state->copyJointGroupPositions(planning_group, current_joint_positions);
+  //current_state->copyJointGroupPositions(planning_group, current_joint_positions);
+  move_group.setJointValueTarget(pose);
 
-  if(current_joint_positions.size() == pose.size()) {
-    move_group.setJointValueTarget(pose);
-    moveit::planning_interface::MoveGroupInterface::Plan plan;
-    return move_group.plan(plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS;
+  //if(current_joint_positions.size() == pose.size()) {
+  moveit::planning_interface::MoveGroupInterface::Plan plan;
+  if(move_group.plan(plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS) {
+    return true;
   }
   else {
-    ROS_ERROR("Cannot go to start pose: different number of actual joint states and goal states.");
     return false;
   }
-
-  return false;
 }
 
 
@@ -217,8 +218,11 @@ class BoundingBox
 class DiscretizedMovementParamServer
 {
   protected:
-    std::vector<double>       start_pose_joint_states;
-    std::string               group_name;
+    std::vector<double>       start_pose_joint_state;
+    std::vector<std::string>  start_pose_joint_names;
+    std::string               startup_group_name;
+    std::string               runtime_group_name;
+    bool                      have_group_names;
     BoundingBox               bounding_box;
     ros::NodeHandle           nh;
 
@@ -227,33 +231,65 @@ class DiscretizedMovementParamServer
     {
       this->nh = nh_;
       bounding_box = get_bounding_box();
+      have_group_names = false;
     }
 
     ~DiscretizedMovementParamServer() {}
 
-    std::vector<double> get_start_pose() {
+    std::map<std::string, double> get_start_pose() {
+    //std::vector<double> get_start_pose() {
       if(
-          nh.hasParam(ROSPARAM_NAME_STARTPOSE_JOINTSTATE)
+          nh.hasParam(ROSPARAM_NAME_STARTPOSE_JOINTSTATE) &&
+          nh.hasParam(ROSPARAM_NAME_STARTPOSE_JOINTNAMES)
         ) {
-        nh.param(ROSPARAM_NAME_STARTPOSE_JOINTSTATE, start_pose_joint_states);
+        nh.getParam(ROSPARAM_NAME_STARTPOSE_JOINTSTATE, start_pose_joint_state);
+        nh.getParam(ROSPARAM_NAME_STARTPOSE_JOINTNAMES, start_pose_joint_names);
       } else {
-        ROS_ERROR("Joint state parameter must be set. Aborting.");
+        ROS_ERROR("Joint state parameters must be set. Aborting.");
         exit(1);
       }
-      return start_pose_joint_states;
+
+      if(start_pose_joint_names.size() != start_pose_joint_state.size()) {
+        ROS_ERROR("Size mismatch between joint states and joint names, so states cannot be obtained. Aborting.");
+        exit(3);
+      }
+
+      std::map<std::string, double> returnme;
+      for(int n = 0; n < (int) start_pose_joint_names.size(); ++n) {
+        returnme.insert(std::pair<std::string, double>(start_pose_joint_names.at(n), start_pose_joint_state.at(n)));
+      }
+      return returnme;
     }
 
-    std::string get_group_name() {
+
+   void server_get_group_names() {
       if(
-          nh.hasParam(ROSPARAM_NAME_GROUP_NAME)
+          nh.hasParam(ROSPARAM_NAME_RUNTIME_GROUP_NAME) &&
+          nh.hasParam(ROSPARAM_NAME_STARTUP_GROUP_NAME)
         ) {
-        nh.param(ROSPARAM_NAME_GROUP_NAME, group_name);
+        nh.getParam(ROSPARAM_NAME_RUNTIME_GROUP_NAME, runtime_group_name);
+        nh.getParam(ROSPARAM_NAME_STARTUP_GROUP_NAME, startup_group_name);
       } else {
         ROS_ERROR("group name parameter must be set. Aborting.");
         exit(1);
       }
-      return group_name;
+      have_group_names = true;
     }
+
+
+   std::string get_runtime_group_name() {
+     if (!have_group_names)
+       server_get_group_names();
+     return runtime_group_name;
+   }
+
+
+   std::string get_startup_group_name() {
+     if (!have_group_names)
+       server_get_group_names();
+     return startup_group_name;
+   }
+
 
     BoundingBox get_bounding_box() {
       double step_size, max_x, max_y, min_x, min_y, start_x, start_y;
@@ -275,6 +311,8 @@ int main(int argc, char *argv[])
 {
   ros::init(argc, argv, "simplified_kinematics");
   ros::NodeHandle nh;
+  ros::AsyncSpinner spinner(0);
+  spinner.start();
   ROS_INFO("Starting up...");
 
   Discretized_Movement_Action action_server("simplified_kinematics", nh);
@@ -284,15 +322,16 @@ int main(int argc, char *argv[])
 
   ROS_INFO("Going to try going to the start pose...");
   DiscretizedMovementParamServer param_server(nh);
-  moveit::planning_interface::MoveGroupInterface move_group(param_server.get_group_name());
+  param_server.server_get_group_names();
+  moveit::planning_interface::MoveGroupInterface move_group(param_server.get_startup_group_name());
 
-  if(!goToPose(param_server.get_start_pose(), param_server.get_group_name(), move_group)) {
+  if(!goToPose(param_server.get_start_pose(), param_server.get_runtime_group_name(), move_group)) {
     ROS_ERROR("Unable to achieve start pose. Ending.");
     exit(2);
   }
 
   ROS_INFO("The entire node is now ready.");
-  ros::spin();
+  ros::waitForShutdown();
 
   ROS_INFO("Told to shut down. Goodbye!");
 
