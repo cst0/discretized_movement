@@ -1,9 +1,3 @@
-/*
- * TODO:
- * -refactor main into more functions
- * -refactor this into mulitple files
- */
-
 /**
  * This code is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -59,25 +53,32 @@
 #include <discretized_movement/World_State.hpp>
 #include <discretized_movement/Standard_Parameter_Names.h>
 
-bool goToPose(std::map<std::string, double> pose,
-              std::string planning_group,
-              moveit::planning_interface::MoveGroupInterface& move_group)
-{
-  sensor_msgs::JointState msg;
-
+bool goToPose(std::map<std::string, double> pose, std::string planning_group,
+              moveit::planning_interface::MoveGroupInterface &move_group) {
   moveit::core::RobotStatePtr current_state = move_group.getCurrentState();
-  std::vector<double> current_joint_positions;
-  //current_state->copyJointGroupPositions(planning_group, current_joint_positions);
-  move_group.setJointValueTarget(pose);
+  std::vector<double> joint_group_positions;
+  const robot_state::JointModelGroup *joint_model_group =
+      current_state->getJointModelGroup(planning_group);
+  current_state->copyJointGroupPositions(joint_model_group,
+                                         joint_group_positions);
+  std::vector<std::string> names = joint_model_group->getJointModelNames();
 
-  //if(current_joint_positions.size() == pose.size()) {
-  moveit::planning_interface::MoveGroupInterface::Plan plan;
-  if(move_group.plan(plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS) {
-    return true;
+  for (int n = 0; n < (int) joint_group_positions.size(); ++n) {
+    if (pose.count(names[n])) { // names[n] is in the map
+      joint_group_positions[n] = pose[names[n]];
+    }
   }
-  else {
-    return false;
-  }
+
+  move_group.setJointValueTarget(joint_group_positions);
+
+  moveit::planning_interface::MoveGroupInterface::Plan start_pose_plan;
+
+  bool success = (move_group.plan(start_pose_plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS);
+  ROS_INFO("Moving to initial start pose planning resulted in %s", success ? "success" : "failed");
+  if(success)
+      success = (move_group.move() == moveit::planning_interface::MoveItErrorCode::SUCCESS);
+
+  return success;
 }
 
 int main(int argc, char *argv[])
@@ -88,17 +89,16 @@ int main(int argc, char *argv[])
   spinner.start();
   ROS_INFO("Starting up...");
 
-  Discretized_Movement_Action action_server("simplified_kinematics", nh);
+  DiscretizedMovementParamServer param_server(nh);
+  moveit::planning_interface::MoveGroupInterface move_group(param_server.get_group_name());
+
+  Discretized_Movement_Action action_server("simplified_kinematics", nh, move_group);
   ROS_INFO("Movement action server is now running.");
   Discretized_Interact_Action interact_server("simplified_interaction", nh);
   ROS_INFO("Interaction action server is now running.");
 
   ROS_INFO("Going to try going to the start pose...");
-  DiscretizedMovementParamServer param_server(nh);
-  param_server.server_get_group_names();
-  moveit::planning_interface::MoveGroupInterface move_group(param_server.get_startup_group_name());
-
-  if(!goToPose(param_server.get_start_pose(), param_server.get_runtime_group_name(), move_group)) {
+  if(!goToPose(param_server.get_start_pose(), param_server.get_group_name(), move_group)) {
     ROS_ERROR("Unable to achieve start pose. Ending.");
     exit(2);
   }

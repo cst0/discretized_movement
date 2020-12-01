@@ -5,8 +5,9 @@ import actionlib
 import discretized_movement.msg
 
 class _Getch:
-    """Gets a single character from standard input.  Does not echo to the
-screen."""
+    """
+    Gets a single character from standard input.  Does not echo to the screen.
+    """
     def __init__(self):
         self.impl = _GetchUnix()
 
@@ -53,7 +54,7 @@ def movement_client():
             print("\u2192", end=" ")
         if ch == 'q':
             keep_running = False
-            break;
+            break
 
         client.send_goal_and_wait(goal)
         print(client.get_result())

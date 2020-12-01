@@ -28,7 +28,6 @@
 #include <moveit_msgs/GetPositionIK.h>
 
 #include <discretized_movement/Bounding_Box.hpp>
-#include <discretized_movement/Discretized_Movement_Param_Server.hpp>
 #include <discretized_movement/World_Object.hpp>
 #include <discretized_movement/World_State.hpp>
 #include <discretized_movement/Standard_Parameter_Names.h>

@@ -1,6 +1,4 @@
-#ifndef BOUNDING_BOX_H
-#define BOUNDING_BOX_H
-
+#pragma once
 #include <discretized_movement/Bounding_Box.hpp>
 
 class WorldState
@@ -14,5 +12,3 @@ class WorldState
       objects = objects_;
     }
 };
-
-#endif

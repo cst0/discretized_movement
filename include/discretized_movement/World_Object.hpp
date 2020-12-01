@@ -1,5 +1,5 @@
-#ifndef WORLD_OBJECT_H
-#define WORLD_OBJECT_H
+#pragma once
+
 class WorldObject
 {
   public:
@@ -17,5 +17,3 @@ class WorldObject
       grasping = grasping_;
     }
 };
-
-#endif
