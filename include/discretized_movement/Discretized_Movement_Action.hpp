@@ -40,12 +40,17 @@ class Discretized_Movement_Action
   protected:
 
     actionlib::SimpleActionServer<discretized_movement::MoveAction> MoveActionServer_;
-    int grid_steps_x, grid_steps_y;
+
+    discretized_movement::MoveFeedback feedback_;
+    discretized_movement::MoveResult result_;
+
     BoundingBox bounds;
+    int grid_steps_x, grid_steps_y;
     int current_x_coord, current_y_coord;
     std::vector<std::string> **world_states;
     geometry_msgs::Pose ee_start_pose;
     moveit::planning_interface::MoveGroupInterface *move_group;
+    moveit::planning_interface::PlanningSceneInterface planning_scene_interface;
 
   public:
 
@@ -69,9 +74,15 @@ class Discretized_Movement_Action
         for(int n = 0; n < grid_steps_x; ++n)
             world_states[n] = new std::vector<std::string> [grid_steps_y];
 
+        // basic init stuff
         move_group = &move_group_;
-
         ee_start_pose = move_group->getCurrentPose().pose;
+
+        // set up table, obstacle layer obstacle
+        std::vector<moveit_msgs::CollisionObject> vec;
+        vec.push_back(paramServer.get_table_obstacle(*move_group));
+        vec.push_back(paramServer.get_obstacle_obstacle(*move_group));
+        planning_scene_interface.addCollisionObjects(vec);
 
         MoveActionServer_.start();
       }
@@ -101,22 +112,28 @@ class Discretized_Movement_Action
 
       if(0 > goal_coord_y || goal_coord_y > grid_steps_y) {
         ROS_WARN("you tried going out-of-bounds!");
+        MoveActionServer_.setAborted();
         return;
       }
 
       if(0 > goal_coord_x || goal_coord_x > grid_steps_y) {
         ROS_WARN("you tried going out-of-bounds!");
+        MoveActionServer_.setAborted();
         return;
       }
 
-      double goal_x = (goal_coord_x * step_size_x) + ee_start_pose.position.x;
-      double goal_y = (goal_coord_y * step_size_y) + ee_start_pose.position.y;
+      double goal_x = (goal_coord_x * bounds.step_size_x) + ee_start_pose.position.x;
+      double goal_y = (goal_coord_y * bounds.step_size_y) + ee_start_pose.position.y;
 
       bool success = attempt_move(goal_x, goal_y);
       if(success) {
         current_x_coord = goal_coord_x;
         current_y_coord = goal_coord_y;
-        MoveActionServer_.setSucceeded();
+        feedback_.state.x = current_x_coord;
+        feedback_.state.y = current_y_coord;
+        result_.success = true;
+        MoveActionServer_.publishFeedback(feedback_);
+        MoveActionServer_.setSucceeded(result_);
       } else {
         MoveActionServer_.setAborted();
       }

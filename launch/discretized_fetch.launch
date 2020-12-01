@@ -3,10 +3,10 @@
     <param name="step_size_y"             value="0.05"/>
     <param name="max_x"                   value="0.65"/>
     <param name="min_x"                   value="0"/>
-    <param name="start_x"                 value="0"/>
+    <param name="start_x"                 value="0.42"/>
     <param name="max_y"                   value="0.65"/>
     <param name="min_y"                   value="0"/>
-    <param name="start_y"                 value="0"/>
+    <param name="start_y"                 value="-0.3"/>
     <param name="group_name"              value="arm_with_torso"/>
     <rosparam param="start_pose_joint_names"> [torso_lift_joint , bellows_joint , head_pan_joint , head_tilt_joint , shoulder_pan_joint , shoulder_lift_joint , upperarm_roll_joint , elbow_flex_joint , forearm_roll_joint , wrist_flex_joint , wrist_roll_joint]</rosparam>
     <rosparam param="start_pose_joint_states">[0.35             , 0.16          , 0.0            , 0.875           , 0.0                , 0.0                 , 1.35                , -1.85            , 1.6                , -1.8             , 1.30]</rosparam>
@@ -14,6 +14,8 @@
     <rosparam param="start_pose_joint_states">[0.35             , 0.15          , 0.0            , 0.85            , -1.5               , -1.0                , -2.3                , -2.1             , 2.4                , 0.7              , 0.24]
     </rosparam>
     -->
+    <param name="table_layer_height"    value="0.723"/>
+    <param name="obstacle_layer_height" value="0.774"/>
 
     <node name="discretized_movement" pkg="discretized_movement" type="movement_server" output="screen"/>
 </launch>
