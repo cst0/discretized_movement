@@ -30,34 +30,56 @@ class _GetchUnix:
         return ch
 
 def movement_client():
-    client = actionlib.SimpleActionClient('simplified_kinematics', discretized_movement.msg.MoveAction)
-    client.wait_for_server()
+    kinematics_client = actionlib.SimpleActionClient('simplified_kinematics', discretized_movement.msg.MoveAction)
+    kinematics_client.wait_for_server()
+    interation_client = actionlib.SimpleActionClient('simplified_interaction', discretized_movement.msg.InteractAction)
+    interation_client.wait_for_server()
 
-    rospy.loginfo("client is ready: use WASD to control positioning, or Q to quit.")
+
+    rospy.loginfo("client is ready: use WASD to control positioning, o to grab, p to release, any other key to quit.")
 
     keep_running = True
     while keep_running:
-        goal = discretized_movement.msg.MoveGoal()
+        move_goal = discretized_movement.msg.MoveGoal()
+        interact_goal = discretized_movement.msg.InteractGoal()
+        move_goal_set = False
+        interact_goal_set = False
         getch = _Getch()
         ch = getch()
         if ch == 'w':
-            goal.move.direction = goal.move.UP
+            move_goal.move.direction = move_goal.move.UP
             print("\u2191", end=" ")
-        if ch == 'a':
-            goal.move.direction = goal.move.LEFT
+            move_goal_set = True
+        elif ch == 'a':
+            move_goal.move.direction = move_goal.move.LEFT
             print("\u2190", end=" ")
-        if ch == 's':
-            goal.move.direction = goal.move.DOWN
+            move_goal_set = True
+        elif ch == 's':
+            move_goal.move.direction = move_goal.move.DOWN
             print("\u2193", end=" ")
-        if ch == 'd':
-            goal.move.direction = goal.move.RIGHT
+            move_goal_set = True
+        elif ch == 'd':
+            move_goal.move.direction = move_goal.move.RIGHT
             print("\u2192", end=" ")
-        if ch == 'q':
+            move_goal_set = True
+        elif ch == 'o':
+            interact_goal.action.interact = interact_goal.action.GRAB
+            print("grab", end=" ")
+            interact_goal_set = True
+        elif ch == 'p':
+            interact_goal.action.interact = interact_goal.action.RELEASE
+            print("release", end=" ")
+            interact_goal_set = True
+        else:
             keep_running = False
-            break
+            print("bye!")
 
-        client.send_goal_and_wait(goal)
-        print(client.get_result())
+        if move_goal_set:
+            kinematics_client.send_goal_and_wait(move_goal)
+            print(kinematics_client.get_result())
+        if interact_goal_set:
+            interation_client.send_goal_and_wait(interact_goal)
+            print(interation_client.get_result())
 
 
 def main():

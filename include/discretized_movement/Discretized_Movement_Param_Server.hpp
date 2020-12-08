@@ -31,8 +31,6 @@
 
 #include <discretized_movement/Bounding_Box.hpp>
 #include <discretized_movement/Standard_Parameter_Names.h>
-#include <discretized_movement/World_Object.hpp>
-#include <discretized_movement/World_State.hpp>
 #include <utility>
 
 class DiscretizedMovementParamServer {
@@ -42,6 +40,7 @@ protected:
   std::string group_name;
   BoundingBox bounding_box;
   ros::NodeHandle nh;
+  moveit::planning_interface::PlanningSceneInterface planning_scene_interface;
 
 public:
   DiscretizedMovementParamServer(ros::NodeHandle nh_) {
@@ -94,6 +93,18 @@ public:
     return "";
   }
 
+  double get_layer_height() {
+    double returnval;
+    nh.param(ROSPARAM_NAME_LAYER_HEIGHT, returnval, 0.04);
+    return returnval;
+  }
+
+  double get_layer_count() {
+    double returnval;
+    nh.param(ROSPARAM_NAME_LAYER_COUNT, returnval, 5.0);
+    return returnval;
+  }
+
   BoundingBox get_bounding_box() {
     double step_size_x, step_size_y, max_x, max_y, min_x, min_y, start_x,
         start_y;
@@ -143,7 +154,7 @@ public:
     position.orientation.w = 1;
     position.position.x = bb.start_x + (primitive.dimensions[0]/2);
     position.position.y = bb.start_y + (primitive.dimensions[1]/2);
-    
+
     position.position.z = primitive.dimensions[2]/2; // table height is handled by box size
 
     return std::pair<geometry_msgs::Pose, shape_msgs::SolidPrimitive>(position, primitive);
@@ -163,7 +174,7 @@ public:
       co.id = "table";
 
       std::pair<geometry_msgs::Pose, shape_msgs::SolidPrimitive> table_pair = get_table_obstacle();
-      
+
       co.primitive_poses.push_back(table_pair.first);
       co.primitives.push_back(table_pair.second);
       co.operation = co.ADD;
@@ -184,4 +195,26 @@ public:
 
       return co;
   }
+
+  void insert_obstacle(moveit::planning_interface::MoveGroupInterface *move_group) {
+        // set up table, obstacle layer obstacle
+        std::vector<moveit_msgs::CollisionObject> vec;
+        vec.push_back(get_table_obstacle(*move_group));
+        vec.push_back(get_obstacle_obstacle(*move_group));
+        planning_scene_interface.addCollisionObjects(vec);
+
+  }
+
+  void remove_table_obstacle() {
+      std::vector<std::string> vec;
+      vec.push_back("obstacle_layer");
+      planning_scene_interface.removeCollisionObjects(vec);
+  }
+
+  void reinsert_table_obstacle(moveit::planning_interface::MoveGroupInterface *move_group) {
+      std::vector<moveit_msgs::CollisionObject> vec;
+      vec.push_back(get_table_obstacle(*move_group));
+      planning_scene_interface.addCollisionObjects(vec);
+  }
+
 };

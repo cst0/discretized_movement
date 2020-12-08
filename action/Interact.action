@@ -2,4 +2,4 @@ discretized_movement/interact action
 ---
 bool success
 ---
-discretized_movement/robotstate state
+discretized_movement/worldstate worldstate

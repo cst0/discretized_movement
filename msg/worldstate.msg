@@ -1,1 +1,2 @@
 discretized_movement/worldobject[] observed_objects
+discretized_movement/robotstate robot_state

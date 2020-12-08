@@ -12,6 +12,7 @@ find_package(catkin REQUIRED COMPONENTS
   roscpp
   rospy
   std_msgs
+  control_msgs
   moveit_core
   moveit_ros_planning
   moveit_ros_move_group
@@ -37,6 +38,7 @@ add_action_files(FILES
 
 generate_messages(DEPENDENCIES
   actionlib_msgs
+  control_msgs
   std_msgs
 )
 
@@ -49,6 +51,7 @@ catkin_package(
   message_runtime
   roscpp
   rospy
+  control_msgs
   std_msgs
   moveit_core
   moveit_ros_planning

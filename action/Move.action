@@ -2,4 +2,4 @@ discretized_movement/movement move
 ---
 bool success
 ---
-discretized_movement/robotstate state
+discretized_movement/worldstate worldstate

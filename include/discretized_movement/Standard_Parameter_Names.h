@@ -14,5 +14,7 @@
 #define   ROSPARAM_NAME_STARTPOSE_JOINTSTATE "start_pose_joint_states"
 #define   ROSPARAM_NAME_TABLE_HEIGHT         "table_layer_height"
 #define   ROSPARAM_NAME_OBSTACLE_HEIGHT      "obstacle_layer_height"
+#define   ROSPARAM_NAME_LAYER_COUNT          "layer_count"
+#define   ROSPARAM_NAME_LAYER_HEIGHT         "layer_height"
 
 #endif
