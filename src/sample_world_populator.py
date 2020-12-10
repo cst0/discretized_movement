@@ -31,11 +31,14 @@ def main():
     publisher = rospy.Publisher('/world_state_status', worldstate, queue_size=1, latch=True)
 
 
-    rate = rospy.Rate(1)  # node persists for 2 seconds
+    rate = rospy.Rate(.2)
     while not rospy.is_shutdown():
         rate.sleep()
         publisher.publish(newmsg)
-        break;
+        if publisher.get_num_connections() > 0:
+            rospy.loginfo("Looks like something's received that message. All done! Exiting node.")
+            break
+        rospy.loginfo_throttle(2, "Nothing's received this message yet, will keep trying...")
 
 
 if __name__ == "__main__":

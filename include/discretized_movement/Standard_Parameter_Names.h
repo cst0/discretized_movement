@@ -16,5 +16,6 @@
 #define   ROSPARAM_NAME_OBSTACLE_HEIGHT      "obstacle_layer_height"
 #define   ROSPARAM_NAME_LAYER_COUNT          "layer_count"
 #define   ROSPARAM_NAME_LAYER_HEIGHT         "layer_height"
+#define   ROSPARAM_NAME_DO_NOT_CONNECT       "do_not_connect"
 
 #endif

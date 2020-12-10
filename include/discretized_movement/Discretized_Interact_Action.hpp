@@ -49,19 +49,20 @@ protected:
   DiscretizedMovementParamServer paramServer;
 
   std::mutex *world_state_mutex;
+  bool do_not_connect;
 
 public:
-  Discretized_Interact_Action(
-      std::string name, ros::NodeHandle nh,
-      moveit::planning_interface::MoveGroupInterface &move_group_,
-      std::mutex &m, discretized_movement::worldstate &world_state_)
+  Discretized_Interact_Action(std::string name, ros::NodeHandle nh,
+                              std::mutex &m,
+                              discretized_movement::worldstate &world_state_,
+                              bool do_not_connect_)
       : InteractActionServer_(
             nh, name,
             boost::bind(&Discretized_Interact_Action::execute, this, _1),
             false),
         gripper_client("gripper_controller/gripper_action"), action_name_(name),
         paramServer(nh) {
-    move_group = &move_group_;
+    do_not_connect = do_not_connect_;
     world_state = &world_state_;
     world_state_mutex = &m;
 
@@ -69,6 +70,11 @@ public:
   }
 
   ~Discretized_Interact_Action(void) {}
+
+  void attach_move_group(
+      moveit::planning_interface::MoveGroupInterface &move_group_) {
+    move_group = &move_group_;
+  }
 
   void execute(const discretized_movement::InteractGoalConstPtr &goal) {
     bool success = false;
@@ -85,19 +91,21 @@ public:
   }
 
   bool attempt_grab() {
-    paramServer.remove_obstacles();
+    if (!do_not_connect)
+      paramServer.remove_obstacles();
     world_state_mutex->lock();
     feedback_.worldstate = *world_state;
     if (world_state->robot_state.grasping) {
       ROS_INFO("You're already grasping an object! Won't try grasping again.");
       world_state_mutex->unlock();
-      paramServer.reinsert_obstacles(move_group);
+      if (!do_not_connect)
+        paramServer.reinsert_obstacles(move_group);
       result_.success = false;
       return false;
     }
 
     for (int n = 0; n < (int)world_state->observed_objects.size(); ++n) {
-        int max_layer_index = 0;
+      int max_layer_index = 0;
       if (world_state->observed_objects[n].x == world_state->robot_state.x &&
           world_state->observed_objects[n].y == world_state->robot_state.y) {
         for (int m = 0; m < (int)world_state->observed_objects.size(); ++m) {
@@ -124,7 +132,8 @@ public:
             world_state->observed_objects[n].name;
         world_state->observed_objects[n].grasped = true;
         world_state_mutex->unlock();
-        paramServer.reinsert_obstacles(move_group);
+        if (!do_not_connect)
+          paramServer.reinsert_obstacles(move_group);
         feedback_.worldstate = *world_state;
         result_.success = true;
         ROS_INFO("Grabbed!");
@@ -133,21 +142,24 @@ public:
     }
     world_state_mutex->unlock();
 
-    paramServer.reinsert_obstacles(move_group);
+    if (!do_not_connect)
+      paramServer.reinsert_obstacles(move_group);
     result_.success = false;
     ROS_INFO("You tried grasping at a point where there was nothing to grasp!");
     return false;
   }
 
   bool attempt_release() {
-    paramServer.remove_obstacles();
+    if (!do_not_connect)
+      paramServer.remove_obstacles();
     world_state_mutex->lock();
     feedback_.worldstate = *world_state;
     if (!world_state->robot_state.grasping) {
       ROS_INFO("You're not grasping any object! Nothing to try to release.");
       world_state_mutex->unlock();
       result_.success = false;
-      paramServer.reinsert_obstacles(move_group);
+      if (!do_not_connect)
+        paramServer.reinsert_obstacles(move_group);
       return false;
     }
 
@@ -174,14 +186,16 @@ public:
         feedback_.worldstate = *world_state;
         result_.success = true;
         world_state_mutex->unlock();
-        paramServer.reinsert_obstacles(move_group);
+        if (!do_not_connect)
+          paramServer.reinsert_obstacles(move_group);
         ROS_INFO("Released!");
         return true;
       }
     }
 
     world_state_mutex->unlock();
-    paramServer.reinsert_obstacles(move_group);
+    if (!do_not_connect)
+      paramServer.reinsert_obstacles(move_group);
     result_.success = false;
     return false;
   }
@@ -197,6 +211,8 @@ public:
   }
 
   void go_down(int layer) {
+    if (do_not_connect)
+      return;
     layer += 1;
     double layer_height = paramServer.get_layer_height();
     double table_height = paramServer.get_table_height();
@@ -211,6 +227,8 @@ public:
   }
 
   void go_up() {
+    if (do_not_connect)
+      return;
     double table_height = paramServer.get_table_height();
     double layer_height = paramServer.get_layer_height();
     double layer_count = paramServer.get_layer_count();
@@ -225,6 +243,8 @@ public:
   }
 
   bool move_to_position(double position) {
+    if (do_not_connect)
+      return true;
     if (!gripper_client.isServerConnected()) {
       ROS_INFO("[FetchGripper] waitForServer...");
       gripper_client.waitForServer();

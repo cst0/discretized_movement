@@ -141,6 +141,13 @@ public:
     return returnme;
   }
 
+  bool get_do_not_connect() {
+    bool returnme = false;
+    if (nh.hasParam(ROSPARAM_NAME_DO_NOT_CONNECT))
+      nh.getParam(ROSPARAM_NAME_DO_NOT_CONNECT, returnme);
+    return returnme;
+  }
+
   std::pair<geometry_msgs::Pose, shape_msgs::SolidPrimitive> get_obstacle(std::string obstacle) {
     BoundingBox bb = get_bounding_box();
     shape_msgs::SolidPrimitive primitive;

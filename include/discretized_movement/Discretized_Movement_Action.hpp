@@ -51,17 +51,23 @@ protected:
   moveit::planning_interface::MoveGroupInterface *move_group;
   moveit::planning_interface::PlanningSceneInterface planning_scene_interface;
 
+  DiscretizedMovementParamServer paramServer;
+
+  bool do_not_connect;
+
 public:
   Discretized_Movement_Action(
       std::string name, ros::NodeHandle nh,
-      moveit::planning_interface::MoveGroupInterface &move_group_,
-      std::mutex &m, discretized_movement::worldstate &world_state_)
+      std::mutex &m, discretized_movement::worldstate &world_state_,
+      bool do_not_connect_)
       : MoveActionServer_(
             nh, name,
             boost::bind(&Discretized_Movement_Action::execute, this, _1),
-            false) {
+            false),
+    paramServer(nh) {
 
-    DiscretizedMovementParamServer paramServer(nh);
+    do_not_connect = do_not_connect_;
+
     bounds = paramServer.get_bounding_box();
     grid_steps_x = 13;
     grid_steps_y = 13;
@@ -71,16 +77,17 @@ public:
     world_state_mutex = &m;
     world_state = &world_state_;
 
-    // basic init stuff
-    move_group = &move_group_;
-    ee_start_pose = move_group->getCurrentPose().pose;
-
-    paramServer.insert_obstacle(move_group);
-
     MoveActionServer_.start();
   }
 
   ~Discretized_Movement_Action(void) {}
+
+  void attach_move_group(moveit::planning_interface::MoveGroupInterface &move_group_) {
+       move_group = &move_group_;
+      ee_start_pose = move_group->getCurrentPose().pose;
+
+      paramServer.insert_obstacle(move_group);
+ }
 
   void execute(const discretized_movement::MoveGoalConstPtr &goal) {
     ros::Rate r(1);
@@ -128,13 +135,14 @@ public:
       world_state->robot_state.x = current_x_coord;
       world_state->robot_state.y = current_y_coord;
 
-      if(world_state->robot_state.grasping) {
-          for (int n = 0; n < world_state->observed_objects.size(); ++n) {
-              if (world_state->observed_objects[n].name == world_state->robot_state.current_grasp) {
-                world_state->observed_objects[n].x = current_x_coord;
-                world_state->observed_objects[n].y = current_y_coord;
-              }
+      if (world_state->robot_state.grasping) {
+        for (int n = 0; n < world_state->observed_objects.size(); ++n) {
+          if (world_state->observed_objects[n].name ==
+              world_state->robot_state.current_grasp) {
+            world_state->observed_objects[n].x = current_x_coord;
+            world_state->observed_objects[n].y = current_y_coord;
           }
+        }
       }
 
       feedback_.worldstate = *world_state;
@@ -150,6 +158,8 @@ public:
   }
 
   bool attempt_move(double goal_x, double goal_y) {
+    if (do_not_connect)
+      return true;
     std::vector<geometry_msgs::Pose> waypoints;
     geometry_msgs::Pose goal_pose = move_group->getCurrentPose().pose;
     goal_pose.position.x = goal_x;
