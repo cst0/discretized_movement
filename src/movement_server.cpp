@@ -33,6 +33,7 @@
 
 // message imports
 #include <discretized_movement/worldstate.h>
+#include <discretized_movement/Discretized_Space_Updater.hpp>
 #include <sensor_msgs/JointState.h>
 
 // moveit stuff
@@ -86,21 +87,12 @@ bool goToPose(double x, double y, double z, moveit::planning_interface::MoveGrou
     return true;
 }
 
-void populate_world_state(discretized_movement::worldstate &world_state, std::mutex &m)
-{
-    m.lock();
-    world_state.robot_state.grasping = false;
-    world_state.robot_state.x = 0;
-    world_state.robot_state.y = 0;
-    discretized_movement::worldobject wo;
-    wo.x = 0;
-    wo.y = 0;
-    discretized_movement::worldobject wo1;
-    wo1.x = 2;
-    wo1.y = 2;
-    world_state.observed_objects.push_back(wo);
-    world_state.observed_objects.push_back(wo1);
-    m.unlock();
+discretized_movement::worldstate world_state;
+std::mutex world_state_mutex;
+void spaceUpdaterCallback(const discretized_movement::worldstateConstPtr &msg) {
+  world_state_mutex.lock();
+  world_state.observed_objects = msg->observed_objects;
+  world_state_mutex.unlock();
 }
 
 int main(int argc, char *argv[])
@@ -111,12 +103,17 @@ int main(int argc, char *argv[])
   spinner.start();
   ROS_INFO("Starting up...");
 
+  ros::Rate rate(10);
+  ros::Subscriber sub = nh.subscribe("/world_state_status", 1, spaceUpdaterCallback);
+  while(sub.getNumPublishers() < 1) {
+      ROS_WARN_THROTTLE(1, "Waiting for data on /world_state_status");
+      rate.sleep();  // not really necessary, just to prevent sucking down cpu cycles here
+  }
+
+  ROS_INFO("Got an environment.");
+
   DiscretizedMovementParamServer param_server(nh);
   moveit::planning_interface::MoveGroupInterface move_group(param_server.get_group_name());
-
-  std::mutex world_state_mutex;
-  discretized_movement::worldstate world_state;
-  populate_world_state(world_state, world_state_mutex);
 
   Discretized_Movement_Action action_server("simplified_kinematics", nh, move_group, world_state_mutex, world_state);
   ROS_INFO("Movement action server is now running.");
@@ -139,7 +136,6 @@ int main(int argc, char *argv[])
   }
 
   ros::Publisher pub = nh.advertise<discretized_movement::worldstate>("world_state", 5);
-  ros::Rate rate(10);
   ROS_INFO("The entire node is now ready.");
   while(ros::ok()) {
       pub.publish(world_state);

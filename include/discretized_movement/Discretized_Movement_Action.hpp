@@ -120,10 +120,28 @@ public:
 
     bool success = attempt_move(goal_x, goal_y);
     if (success) {
+
+      world_state_mutex->lock();
+
       current_x_coord = goal_coord_x;
       current_y_coord = goal_coord_y;
+      world_state->robot_state.x = current_x_coord;
+      world_state->robot_state.y = current_y_coord;
+
+      if(world_state->robot_state.grasping) {
+          for (int n = 0; n < world_state->observed_objects.size(); ++n) {
+              if (world_state->observed_objects[n].name == world_state->robot_state.current_grasp) {
+                world_state->observed_objects[n].x = current_x_coord;
+                world_state->observed_objects[n].y = current_y_coord;
+              }
+          }
+      }
+
       feedback_.worldstate = *world_state;
       result_.success = true;
+
+      world_state_mutex->unlock();
+
       MoveActionServer_.publishFeedback(feedback_);
       MoveActionServer_.setSucceeded(result_);
     } else {
@@ -133,7 +151,6 @@ public:
 
   bool attempt_move(double goal_x, double goal_y) {
     std::vector<geometry_msgs::Pose> waypoints;
-    world_state_mutex->lock();
     geometry_msgs::Pose goal_pose = move_group->getCurrentPose().pose;
     goal_pose.position.x = goal_x;
     goal_pose.position.y = goal_y;
@@ -153,7 +170,6 @@ public:
       move_group->move();
     }
 
-    world_state_mutex->unlock();
     return success;
   }
 };

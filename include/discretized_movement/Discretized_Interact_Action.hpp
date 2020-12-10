@@ -59,10 +59,8 @@ public:
             nh, name,
             boost::bind(&Discretized_Interact_Action::execute, this, _1),
             false),
-        gripper_client("gripper_controller/gripper_action"),
-        action_name_(name),
-        paramServer(nh)
-    {
+        gripper_client("gripper_controller/gripper_action"), action_name_(name),
+        paramServer(nh) {
     move_group = &move_group_;
     world_state = &world_state_;
     world_state_mutex = &m;
@@ -87,20 +85,38 @@ public:
   }
 
   bool attempt_grab() {
+    paramServer.remove_obstacles();
     world_state_mutex->lock();
     feedback_.worldstate = *world_state;
     if (world_state->robot_state.grasping) {
       ROS_INFO("You're already grasping an object! Won't try grasping again.");
       world_state_mutex->unlock();
+      paramServer.reinsert_obstacles(move_group);
       result_.success = false;
       return false;
     }
 
     for (int n = 0; n < (int)world_state->observed_objects.size(); ++n) {
+        int max_layer_index = 0;
       if (world_state->observed_objects[n].x == world_state->robot_state.x &&
           world_state->observed_objects[n].y == world_state->robot_state.y) {
+        for (int m = 0; m < (int)world_state->observed_objects.size(); ++m) {
+          if (world_state->observed_objects[m].x ==
+                  world_state->robot_state.x &&
+              world_state->observed_objects[m].y ==
+                  world_state->robot_state.y) {
+            if (world_state->observed_objects[m].layer >=
+                world_state->observed_objects[max_layer_index].layer)
+              max_layer_index = m;
+          }
+        }
+
+        ROS_INFO("Interacting with object: %d (%f, %f) named %s", n,
+                 world_state->observed_objects[n].x,
+                 world_state->observed_objects[n].y,
+                 world_state->observed_objects[n].name.c_str());
         open_gripper();
-        go_down(world_state->observed_objects[n].layer);
+        go_down(world_state->observed_objects[max_layer_index].layer);
         close_gripper();
         go_up();
         world_state->robot_state.grasping = true;
@@ -108,6 +124,7 @@ public:
             world_state->observed_objects[n].name;
         world_state->observed_objects[n].grasped = true;
         world_state_mutex->unlock();
+        paramServer.reinsert_obstacles(move_group);
         feedback_.worldstate = *world_state;
         result_.success = true;
         ROS_INFO("Grabbed!");
@@ -116,47 +133,62 @@ public:
     }
     world_state_mutex->unlock();
 
+    paramServer.reinsert_obstacles(move_group);
     result_.success = false;
     ROS_INFO("You tried grasping at a point where there was nothing to grasp!");
     return false;
   }
 
   bool attempt_release() {
+    paramServer.remove_obstacles();
     world_state_mutex->lock();
     feedback_.worldstate = *world_state;
     if (!world_state->robot_state.grasping) {
       ROS_INFO("You're not grasping any object! Nothing to try to release.");
       world_state_mutex->unlock();
       result_.success = false;
+      paramServer.reinsert_obstacles(move_group);
       return false;
     }
 
     for (int n = 0; n < (int)world_state->observed_objects.size(); ++n) {
       if (world_state->observed_objects[n].name ==
           world_state->robot_state.current_grasp) {
-        go_down(world_state->observed_objects[n].layer);
+        double layer = -1; // starting at -1 since there will be one block at
+                           // the current position (in the gripper)
+        for (int m = 0; m < (int)world_state->observed_objects.size(); ++m) {
+          if (world_state->observed_objects[m].x ==
+                  world_state->robot_state.x &&
+              world_state->observed_objects[m].y == world_state->robot_state.y)
+            layer++;
+        }
+
+        go_down(layer);
         open_gripper();
         go_up();
 
         world_state->robot_state.current_grasp = "";
         world_state->robot_state.grasping = false;
         world_state->observed_objects[n].grasped = false;
+        world_state->observed_objects[n].layer = layer;
         feedback_.worldstate = *world_state;
         result_.success = true;
         world_state_mutex->unlock();
+        paramServer.reinsert_obstacles(move_group);
         ROS_INFO("Released!");
         return true;
       }
     }
 
     world_state_mutex->unlock();
+    paramServer.reinsert_obstacles(move_group);
     result_.success = false;
     return false;
   }
 
   bool open_gripper() {
     ROS_INFO("told to open");
-    return move_to_position(1);
+    return move_to_position(.5);
   }
 
   bool close_gripper() {
@@ -165,25 +197,31 @@ public:
   }
 
   void go_down(int layer) {
-      double z = paramServer.get_table_height();
-      double layer_height = paramServer.get_layer_height();
+    layer += 1;
+    double layer_height = paramServer.get_layer_height();
+    double table_height = paramServer.get_table_height();
 
-      double descend = layer_height * layer;
-      geometry_msgs::PoseStamped pose = move_group->getCurrentPose();
-      pose.pose.position.z -= descend;
-      move_group->setPoseTarget(pose);
-      move_group->move();
+    geometry_msgs::PoseStamped pose = move_group->getCurrentPose();
+    pose.pose.position.z =
+        table_height + (layer_height * layer) + (0.90 - table_height);
+    // ROS_INFO("layer %d (%f off of table at %f), %f real", layer,
+    // layer_height, table_height, pose.pose.position.z);
+    move_group->setPoseTarget(pose);
+    move_group->move();
   }
 
   void go_up() {
-      double z = paramServer.get_table_height();
-      double layer_height = paramServer.get_layer_height();
+    double table_height = paramServer.get_table_height();
+    double layer_height = paramServer.get_layer_height();
+    double layer_count = paramServer.get_layer_count();
+    double z = table_height + (layer_height * layer_count);
 
-      double height = layer_height * paramServer.get_layer_count();
-      geometry_msgs::PoseStamped pose = move_group->getCurrentPose();
-      pose.pose.position.z = height + z;
-      move_group->setPoseTarget(pose);
-      move_group->move();
+    geometry_msgs::PoseStamped pose = move_group->getCurrentPose();
+    pose.pose.position.z = 1.058; // z;
+    // ROS_INFO("layer %f (%f off of table), %f real", layer_count,
+    // layer_height, pose.pose.position.z);
+    move_group->setPoseTarget(pose);
+    move_group->move();
   }
 
   bool move_to_position(double position) {
@@ -206,6 +244,6 @@ public:
     } else {
       ROS_INFO("[FetchGripper] Action did not finish before the time out.");
     }
-      return result;
+    return result;
   }
 };

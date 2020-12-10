@@ -205,15 +205,29 @@ public:
 
   }
 
-  void remove_table_obstacle() {
+  void remove_obstacles() {
+      std::vector<std::string> vec;
+      vec.push_back("obstacle_layer");
+      vec.push_back("table");
+      planning_scene_interface.removeCollisionObjects(vec);
+  }
+
+  void reinsert_obstacles(moveit::planning_interface::MoveGroupInterface *move_group) {
+      std::vector<moveit_msgs::CollisionObject> vec;
+      vec.push_back(get_obstacle_obstacle(*move_group));
+      vec.push_back(get_table_obstacle(*move_group));
+      planning_scene_interface.addCollisionObjects(vec);
+  }
+
+  void remove_obstacle_obstacle() {
       std::vector<std::string> vec;
       vec.push_back("obstacle_layer");
       planning_scene_interface.removeCollisionObjects(vec);
   }
 
-  void reinsert_table_obstacle(moveit::planning_interface::MoveGroupInterface *move_group) {
+  void reinsert_obstacle_obstacle(moveit::planning_interface::MoveGroupInterface *move_group) {
       std::vector<moveit_msgs::CollisionObject> vec;
-      vec.push_back(get_table_obstacle(*move_group));
+      vec.push_back(get_obstacle_obstacle(*move_group));
       planning_scene_interface.addCollisionObjects(vec);
   }
 
