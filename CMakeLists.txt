@@ -25,21 +25,23 @@ find_package(Boost REQUIRED COMPONENTS
 )
 
 add_message_files(FILES
-  interact.msg
-  movement.msg
   robotstate.msg
   worldstate.msg
+  worldobject.msg
+  interact.msg
+  movement.msg
 )
 
 add_action_files(FILES
   Interact.action
   Move.action
-)
+  )
 
 generate_messages(DEPENDENCIES
   actionlib_msgs
   control_msgs
   std_msgs
+  discretized_movement
 )
 
 catkin_package(
@@ -72,9 +74,10 @@ add_executable(movement_server
   src/movement_server.cpp
 )
 
-target_link_libraries(movement_server ${catkin_LIBRARIES})
-
 add_dependencies(
   movement_server
+  discretized_movement_generate_messages_cpp
   ${discretized_movement_EXPORTED_TARGETS}
 )
+
+target_link_libraries(movement_server ${catkin_LIBRARIES})

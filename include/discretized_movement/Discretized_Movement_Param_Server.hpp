@@ -13,7 +13,6 @@
 #include <discretized_movement/MoveAction.h>
 
 // message imports
-#include <discretized_movement/state.h>
 #include <sensor_msgs/JointState.h>
 #include <geometry_msgs/Pose.h>
 

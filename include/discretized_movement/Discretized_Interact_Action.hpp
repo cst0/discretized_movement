@@ -5,7 +5,7 @@
 #include <std_msgs/String.h>
 
 // ros stuff
-#include "discretized_movement/worldstate.h"
+#include <discretized_movement/worldstate.h>
 #include <ros/console.h>
 #include <ros/ros.h>
 
@@ -15,7 +15,6 @@
 #include <discretized_movement/InteractAction.h>
 
 // message imports
-#include <discretized_movement/state.h>
 #include <sensor_msgs/JointState.h>
 
 // moveit stuff
