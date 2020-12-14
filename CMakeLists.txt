@@ -74,6 +74,8 @@ add_executable(movement_server
   src/movement_server.cpp
 )
 
+set_property(TARGET movement_server PROPERTY CXX_STANDARD 11)
+
 add_dependencies(
   movement_server
   discretized_movement_generate_messages_cpp
