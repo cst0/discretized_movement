@@ -53,40 +53,63 @@ protected:
   DiscretizedMovementParamServer paramServer;
 
   bool do_not_connect;
+  bool move_group_attached = false;
+
+private:
+  void common_constructor(std::mutex &m,
+                          discretized_movement::worldstate &world_state_) {
+    bounds = paramServer.get_bounding_box();
+    world_state_mutex = &m;
+    world_state = &world_state_;
+
+    grid_steps_x = 10;
+    grid_steps_y = 10;
+    current_x_coord = world_state->robot_state.x;
+    current_y_coord = world_state->robot_state.y;
+  }
 
 public:
-  Discretized_Movement_Action(
-      std::string name, ros::NodeHandle nh,
-      std::mutex &m, discretized_movement::worldstate &world_state_,
-      bool do_not_connect_)
+  Discretized_Movement_Action(std::string name, ros::NodeHandle nh,
+                              std::mutex &m,
+                              discretized_movement::worldstate &world_state_)
       : MoveActionServer_(
             nh, name,
             boost::bind(&Discretized_Movement_Action::execute, this, _1),
             false),
-    paramServer(nh) {
+        paramServer(nh) {
+    do_not_connect = paramServer.get_do_not_connect();
+    if (!do_not_connect) {
+      ROS_ERROR("You have the 'do_not_connect' parameter set to false, but "
+                "you're using the constructor that doesn't connect to the "
+                "move_group... overriding this parameter.");
+      do_not_connect = true;
+    }
 
-    do_not_connect = do_not_connect_;
+    common_constructor(m, world_state_);
+    MoveActionServer_.start();
+  }
 
-    bounds = paramServer.get_bounding_box();
-    grid_steps_x = 13;
-    grid_steps_y = 13;
-    current_x_coord = 0;
-    current_y_coord = 0;
+  Discretized_Movement_Action(
+      std::string name, ros::NodeHandle nh,
+      moveit::planning_interface::MoveGroupInterface &move_group_,
+      std::mutex &m, discretized_movement::worldstate &world_state_)
+      : MoveActionServer_(
+            nh, name,
+            boost::bind(&Discretized_Movement_Action::execute, this, _1),
+            false),
+        paramServer(nh) {
 
-    world_state_mutex = &m;
-    world_state = &world_state_;
+    move_group = &move_group_;
+    move_group_attached = true;
+    ee_start_pose = move_group->getCurrentPose().pose;
 
+    paramServer.insert_obstacle(move_group);
+
+    common_constructor(m, world_state_);
     MoveActionServer_.start();
   }
 
   ~Discretized_Movement_Action(void) {}
-
-  void attach_move_group(moveit::planning_interface::MoveGroupInterface &move_group_) {
-       move_group = &move_group_;
-      ee_start_pose = move_group->getCurrentPose().pose;
-
-      paramServer.insert_obstacle(move_group);
- }
 
   void execute(const discretized_movement::MoveGoalConstPtr &goal) {
     ros::Rate r(1);
@@ -135,7 +158,7 @@ public:
       world_state->robot_state.y = current_y_coord;
 
       if (world_state->robot_state.grasping) {
-        for (int n = 0; n < world_state->observed_objects.size(); ++n) {
+        for (int n = 0; n < (int)world_state->observed_objects.size(); ++n) {
           if (world_state->observed_objects[n].name ==
               world_state->robot_state.current_grasp) {
             world_state->observed_objects[n].x = current_x_coord;
@@ -159,6 +182,10 @@ public:
   bool attempt_move(double goal_x, double goal_y) {
     if (do_not_connect)
       return true;
+    if (!move_group_attached) {
+      ROS_ERROR("move group not attached to this class! cannot continue.");
+      return false;
+    }
     std::vector<geometry_msgs::Pose> waypoints;
     geometry_msgs::Pose goal_pose = move_group->getCurrentPose().pose;
     goal_pose.position.x = goal_x;

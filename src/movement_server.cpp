@@ -86,16 +86,19 @@ bool goToPose(std::map<std::string, double> pose, std::string planning_group,
 
 discretized_movement::worldstate world_state;
 std::mutex world_state_mutex;
+bool WORLD_STATE_STATUS_SET = false;
 void spaceUpdaterCallback(const discretized_movement::worldstateConstPtr &msg) {
   world_state_mutex.lock();
   world_state.observed_objects = msg->observed_objects;
+  world_state.robot_state = msg->robot_state;
   world_state_mutex.unlock();
+  WORLD_STATE_STATUS_SET = true;
 }
 
 int main(int argc, char *argv[]) {
-  ros::init(argc, argv, "simplified_kinematics");
+  ros::init(argc, argv, "discretized_movement_server");
   ros::NodeHandle nh;
-  ros::AsyncSpinner spinner(0);
+  ros::AsyncSpinner spinner(1);
   std::vector<std::basic_string<char>> newargv;
   ros::removeROSArgs(argc, argv, newargv);
 
@@ -106,24 +109,35 @@ int main(int argc, char *argv[]) {
   ros::Subscriber sub =
       nh.subscribe("/world_state_status", 1, spaceUpdaterCallback);
 
+  while(!WORLD_STATE_STATUS_SET)
+      ROS_INFO_THROTTLE(1, "Waiting for world state status to come in...");
+
   DiscretizedMovementParamServer param_server(nh);
   bool do_not_connect = param_server.get_do_not_connect();
 
-  Discretized_Movement_Action action_server("simplified_kinematics", nh,
-                                            world_state_mutex, world_state,
-                                            do_not_connect);
-  ROS_INFO("Movement action server is now running.");
-  Discretized_Interact_Action interact_server("simplified_interaction", nh,
-                                              world_state_mutex, world_state,
-                                              do_not_connect);
-  ROS_INFO("Interaction action server is now running.");
+  if (do_not_connect) {
+    Discretized_Movement_Action action_server("simplified_kinematics", nh,
+                                              world_state_mutex, world_state);
+    ROS_INFO("Movement action server is now running.");
+    Discretized_Interact_Action interact_server("simplified_interaction", nh,
+                                                world_state_mutex, world_state);
+    ROS_INFO("Interaction action server is now running.");
 
-  if (!do_not_connect) {
+    ROS_INFO(
+        "Did not attempt to attach to move group, because do_not_connect=true");
+  } else {
     ROS_INFO("Attempting to attach to move group.");
     moveit::planning_interface::MoveGroupInterface move_group(
         param_server.get_group_name());
-    action_server.attach_move_group(move_group);
-    interact_server.attach_move_group(move_group);
+
+    Discretized_Movement_Action action_server("simplified_kinematics", nh,
+                                              move_group, world_state_mutex,
+                                              world_state);
+    ROS_INFO("Movement action server is now running.");
+    Discretized_Interact_Action interact_server("simplified_interaction", nh,
+                                                move_group, world_state_mutex,
+                                                world_state);
+    ROS_INFO("Interaction action server is now running.");
 
     ROS_INFO("Going to try going to the start pose...");
     geometry_msgs::PoseStamped p = move_group.getCurrentPose();
@@ -133,9 +147,6 @@ int main(int argc, char *argv[]) {
       ROS_ERROR("Unable to achieve start pose. Ending.");
       exit(2);
     }
-  } else {
-    ROS_INFO(
-        "Did not attempt to attach to move group, because do_not_connect=true");
   }
 
   ros::Publisher pub =

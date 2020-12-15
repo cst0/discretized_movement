@@ -30,10 +30,15 @@ class _GetchUnix:
         return ch
 
 def movement_client():
+    rospy.loginfo("Starting up client!")
     kinematics_client = actionlib.SimpleActionClient('simplified_kinematics', discretized_movement.msg.MoveAction)
+    rospy.loginfo("Waiting for 'simplified_kinematics' server...")
     kinematics_client.wait_for_server()
-    interation_client = actionlib.SimpleActionClient('simplified_interaction', discretized_movement.msg.InteractAction)
-    interation_client.wait_for_server()
+    rospy.loginfo("Got the 'simplified_kinematics' server!")
+    #rospy.loginfo("Waiting for 'simplified_interaction' server...")
+    #interation_client = actionlib.SimpleActionClient('simplified_interaction', discretized_movement.msg.InteractAction)
+    #interation_client.wait_for_server()
+    #rospy.loginfo("Got the 'simplified_interaction' server!")
 
 
     rospy.loginfo("client is ready: use WASD to control positioning, o to grab, p to release, any other key to quit.")

@@ -1,0 +1,4 @@
+<launch>
+    <include file="$(find discretized_movement)/launch/discretized_fetch.launch"/>
+    <node name="agent" pkg="low_fidelity_rl" type="main.py" output="screen"/>
+</launch>

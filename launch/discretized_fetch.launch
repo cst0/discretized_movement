@@ -18,12 +18,18 @@ position: [-6.273760795593262, 6.378480434417725, 0.34581223130226135, 0.161, 0.
 velocity: [1.1920928955078125e-07, 1.1920928955078125e-07, -6.556510925292969e-06, -3.2782554626464844e-06, -0.0003440380096435547, -0.0009331703186035156, 0.00024116039276123047, -5.2094459533691406e-05, -0.0005078315734863281, -0.0006079673767089844, 0.00013267993927001953, 0.0004630088806152344, -0.0001983642578125]
 effort: [0.0024547576904296875, 0.0003914833068847656, 12.0703125, 0.0, -0.0, -0.0, -0.1566162109375, -28.390625, 10.6015625, -11.484375, -0.53662109375, 0.398193359375, 0.09783935546875]
 -->
+    <!--
     <rosparam param="start_pose_joint_names"> [torso_lift_joint , bellows_joint , head_pan_joint , head_tilt_joint , shoulder_pan_joint , shoulder_lift_joint , upperarm_roll_joint , elbow_flex_joint , forearm_roll_joint , wrist_flex_joint , wrist_roll_joint]</rosparam>
     <rosparam param="start_pose_joint_states">[0.35             , 0.16          , 0.0            , 0.875           , 0.0                , 0.0                 , 1.35                , -1.85            , 1.6                , -1.8             , 1.30]</rosparam>
+    -->
     <!--
     <rosparam param="start_pose_joint_states">[0.35             , 0.15          , 0.0            , 0.85            , -1.5               , -1.0                , -2.3                , -2.1             , 2.4                , 0.7              , 0.24]
     </rosparam>
     -->
+
+    <rosparam param="start_pose_joint_names"> [torso_lift_joint , bellows_joint , head_pan_joint , head_tilt_joint , shoulder_pan_joint , shoulder_lift_joint , upperarm_roll_joint , elbow_flex_joint , forearm_roll_joint , wrist_flex_joint , wrist_roll_joint]</rosparam>
+    <rosparam param="start_pose_joint_states">[0.37             , 0.184         , 0.127          , 0.987           , 0.274              , 0.213               , 0.827               , -0.944           , 2.24               , -1.97            , 2.70]</rosparam>
+
     <param name="table_layer_height"    value="0.723"/>
     <param name="obstacle_layer_height" value="0.035"/>
 
@@ -57,5 +63,6 @@ effort: [0.0024547576904296875, 0.0003914833068847656, 12.0703125, 0.0, -0.0, -0
         <param name="max_clouds" type="int" value="4" />
     </node>
 
+    <node name="world_state_populator"  pkg="discretized_movement" type="sample_world_populator.py" args="/home/cst/ws_rlproject/src/discretized_movement/src/data/data.yaml"/>
     <!--node name="discretized_movement" pkg="discretized_movement" type="movement_server" output="screen"/-->
 </launch>

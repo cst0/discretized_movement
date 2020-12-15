@@ -9,7 +9,7 @@ from discretized_movement.msg import worldstate, worldobject
 def main():
     # arg parse and other setup
     parser = argparse.ArgumentParser()
-    parser.add_argument('file_path', type=str, help='path to input file')
+    parser.add_argument('file_path', type=str, help='path to input file', default="/home/cst/ws_rlproject/src/discretized_movement/src/data/data.yaml")
     clean_argv = rospy.myargv(argv=sys.argv)[1:]
     args = parser.parse_args(clean_argv)
 
@@ -20,11 +20,15 @@ def main():
     # assign values
     newmsg = worldstate()
     for single_input in inputyaml:
-        newobj = worldobject()
-        newobj.x= single_input['x']
-        newobj.y= single_input['y']
-        newobj.name = single_input['name']
-        newmsg.observed_objects.append(newobj)
+        if single_input['name'] == 'agent':
+            newmsg.robot_state.x = single_input['x']
+            newmsg.robot_state.y = single_input['y']
+        else:
+            newobj = worldobject()
+            newobj.x= single_input['x']
+            newobj.y= single_input['y']
+            newobj.name = single_input['name']
+            newmsg.observed_objects.append(newobj)
 
     # publish and finish
     rospy.init_node('world_state_publisher', anonymous=False)

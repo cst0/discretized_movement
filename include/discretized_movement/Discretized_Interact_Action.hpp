@@ -49,31 +49,60 @@ protected:
 
   std::mutex *world_state_mutex;
   bool do_not_connect;
+  bool move_group_attached = false;
+
+private:
+   void common_constructor(std::mutex &m, discretized_movement::worldstate &world_state_) {
+    world_state_mutex = &m;
+    world_state = &world_state_;
+   }
 
 public:
   Discretized_Interact_Action(std::string name, ros::NodeHandle nh,
                               std::mutex &m,
-                              discretized_movement::worldstate &world_state_,
-                              bool do_not_connect_)
+                              discretized_movement::worldstate &world_state_)
       : InteractActionServer_(
             nh, name,
             boost::bind(&Discretized_Interact_Action::execute, this, _1),
             false),
         gripper_client("gripper_controller/gripper_action"), action_name_(name),
         paramServer(nh) {
-    do_not_connect = do_not_connect_;
+
+    do_not_connect = paramServer.get_do_not_connect();
+    if (!do_not_connect) {
+      ROS_ERROR("You have the 'do_not_connect' parameter set to false, but "
+                "you're using the constructor that doesn't connect to the "
+                "move_group... overriding this parameter.");
+      do_not_connect = true;
+    }
+
+    common_constructor(m, world_state_);
+
+    InteractActionServer_.start();
+  }
+
+  Discretized_Interact_Action(std::string name, ros::NodeHandle nh,
+                              moveit::planning_interface::MoveGroupInterface &move_group_,
+                              std::mutex &m, discretized_movement::worldstate &world_state_)
+      : InteractActionServer_(
+            nh, name,
+            boost::bind(&Discretized_Interact_Action::execute, this, _1),
+            false),
+        gripper_client("gripper_controller/gripper_action"), action_name_(name),
+        paramServer(nh) {
     world_state = &world_state_;
     world_state_mutex = &m;
+
+    move_group = &move_group_;
+    move_group_attached = true;
+
+    common_constructor(m, world_state_);
 
     InteractActionServer_.start();
   }
 
   ~Discretized_Interact_Action(void) {}
 
-  void attach_move_group(
-      moveit::planning_interface::MoveGroupInterface &move_group_) {
-    move_group = &move_group_;
-  }
 
   void execute(const discretized_movement::InteractGoalConstPtr &goal) {
     bool success = false;
@@ -92,6 +121,11 @@ public:
   bool attempt_grab() {
     if (!do_not_connect)
       paramServer.remove_obstacles();
+    if (!move_group_attached) {
+        ROS_ERROR("move group not attached to this class! cannot continue.");
+        return false;
+    }
+
     world_state_mutex->lock();
     feedback_.worldstate = *world_state;
     if (world_state->robot_state.grasping) {
@@ -151,6 +185,11 @@ public:
   bool attempt_release() {
     if (!do_not_connect)
       paramServer.remove_obstacles();
+    if (!move_group_attached) {
+        ROS_ERROR("move group not attached to this class! cannot continue.");
+        return false;
+    }
+
     world_state_mutex->lock();
     feedback_.worldstate = *world_state;
     if (!world_state->robot_state.grasping) {

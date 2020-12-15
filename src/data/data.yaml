@@ -1,3 +1,4 @@
-- {name: red_block,   x: 1 , y: 10}
-- {name: blue_block,  x: 5 , y: 5}
-- {name: green_block, x: 10, y: 1}
+- {name: agent,          x: 5, y: 5}
+- {name: cube1,          x: 3, y: 4}
+- {name: cube2,          x: 4, y: 7}
+- {name: crafting_table, x: 2, y: 2}

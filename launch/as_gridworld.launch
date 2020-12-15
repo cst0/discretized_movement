@@ -1,4 +1,4 @@
-    
+
 <launch>
     <param name="step_size_x"             value="0.025"/>
     <param name="step_size_y"             value="0.05"/>
@@ -29,5 +29,7 @@ effort: [0.0024547576904296875, 0.0003914833068847656, 12.0703125, 0.0, -0.0, -0
     <param name="obstacle_layer_height" value="0.035"/>
 
     <param name="do_not_connect" value="true"/>
-    <node name="discretized_movement" pkg="discretized_movement" type="movement_server" output="screen"/>
+    <node name="world_state_populator"  pkg="discretized_movement" type="sample_world_populator.py" args="/home/cst/ws_rlproject/src/discretized_movement/src/data/data.yaml"/>
+    <node name="planning_scene_spoofer" pkg="discretized_movement" type="get_planning_scene_spoofer.py"/>
+    <node name="discretized_movement"   pkg="discretized_movement" type="movement_server" output="screen"/>
 </launch>
