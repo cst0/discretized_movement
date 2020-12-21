@@ -10,6 +10,7 @@ def main():
     # arg parse and other setup
     parser = argparse.ArgumentParser()
     parser.add_argument('file_path', type=str, help='path to input file', default="/home/cst/ws_rlproject/src/discretized_movement/src/data/data.yaml")
+    parser.add_argument('recipient', type=int)
     clean_argv = rospy.myargv(argv=sys.argv)[1:]
     args = parser.parse_args(clean_argv)
 
@@ -32,7 +33,11 @@ def main():
 
     # publish and finish
     rospy.init_node('world_state_publisher', anonymous=False)
-    publisher = rospy.Publisher('/world_state_status', worldstate, queue_size=1, latch=True)
+    publisher = None
+    if args.recipient == 1:
+        publisher = rospy.Publisher('/world_state_status_agent', worldstate, queue_size=1, latch=True)
+    if args.recipient == 2:
+        publisher = rospy.Publisher('/world_state_status_robot', worldstate, queue_size=1, latch=True)
 
 
     rate = rospy.Rate(.2)

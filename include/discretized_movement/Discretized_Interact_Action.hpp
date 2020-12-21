@@ -5,7 +5,7 @@
 #include <std_msgs/String.h>
 
 // ros stuff
-#include <discretized_movement/worldstate.h>
+#include "discretized_movement/worldstate.h"
 #include <ros/console.h>
 #include <ros/ros.h>
 
@@ -31,6 +31,7 @@
 
 #include <discretized_movement/Bounding_Box.hpp>
 #include <discretized_movement/Discretized_Movement_Param_Server.hpp>
+#include <discretized_movement/Discretized_Movement_Action.hpp>
 
 class Discretized_Interact_Action {
 
@@ -46,70 +47,43 @@ protected:
   discretized_movement::InteractResult result_;
   discretized_movement::worldstate *world_state;
   DiscretizedMovementParamServer paramServer;
+  Discretized_Movement_Action *mover;
 
   std::mutex *world_state_mutex;
-  bool do_not_connect;
-  bool move_group_attached = false;
-
-private:
-   void common_constructor(std::mutex &m, discretized_movement::worldstate &world_state_) {
-    world_state_mutex = &m;
-    world_state = &world_state_;
-   }
+  std::mutex *movement_action_mutex;
 
 public:
-  Discretized_Interact_Action(std::string name, ros::NodeHandle nh,
-                              std::mutex &m,
-                              discretized_movement::worldstate &world_state_)
+  Discretized_Interact_Action(
+      std::string name, ros::NodeHandle nh,
+      moveit::planning_interface::MoveGroupInterface &move_group_,
+      std::mutex &m, discretized_movement::worldstate &world_state_,
+      std::mutex &i, Discretized_Movement_Action &mover_
+      )
       : InteractActionServer_(
             nh, name,
             boost::bind(&Discretized_Interact_Action::execute, this, _1),
             false),
         gripper_client("gripper_controller/gripper_action"), action_name_(name),
         paramServer(nh) {
-
-    do_not_connect = paramServer.get_do_not_connect();
-    if (!do_not_connect) {
-      ROS_ERROR("You have the 'do_not_connect' parameter set to false, but "
-                "you're using the constructor that doesn't connect to the "
-                "move_group... overriding this parameter.");
-      do_not_connect = true;
-    }
-
-    common_constructor(m, world_state_);
-
-    InteractActionServer_.start();
-  }
-
-  Discretized_Interact_Action(std::string name, ros::NodeHandle nh,
-                              moveit::planning_interface::MoveGroupInterface &move_group_,
-                              std::mutex &m, discretized_movement::worldstate &world_state_)
-      : InteractActionServer_(
-            nh, name,
-            boost::bind(&Discretized_Interact_Action::execute, this, _1),
-            false),
-        gripper_client("gripper_controller/gripper_action"), action_name_(name),
-        paramServer(nh) {
-    world_state = &world_state_;
-    world_state_mutex = &m;
-
     move_group = &move_group_;
-    move_group_attached = true;
+    world_state = &world_state_;
+    mover = &mover_;
 
-    common_constructor(m, world_state_);
+    world_state_mutex = &m;
+    movement_action_mutex = &i;
 
     InteractActionServer_.start();
   }
 
   ~Discretized_Interact_Action(void) {}
 
-
   void execute(const discretized_movement::InteractGoalConstPtr &goal) {
     bool success = false;
     if (goal->action.interact == goal->action.GRAB) {
       success = attempt_grab();
     } else if (goal->action.interact == goal->action.RELEASE) {
-      success = attempt_release();
+      //success = attempt_release();
+      success = true;
     } else
       ROS_ERROR("Invalid interaction specification");
 
@@ -119,26 +93,20 @@ public:
   }
 
   bool attempt_grab() {
-    if (!do_not_connect)
-      paramServer.remove_obstacles();
-    if (!move_group_attached) {
-        ROS_ERROR("move group not attached to this class! cannot continue.");
-        return false;
-    }
-
+    paramServer.remove_obstacles();
     world_state_mutex->lock();
     feedback_.worldstate = *world_state;
-    if (world_state->robot_state.grasping) {
-      ROS_INFO("You're already grasping an object! Won't try grasping again.");
-      world_state_mutex->unlock();
-      if (!do_not_connect)
-        paramServer.reinsert_obstacles(move_group);
-      result_.success = false;
-      return false;
-    }
+// using an inventory, ignore what's going on here
+//    if (world_state->robot_state.grasping) {
+//      ROS_INFO("You're already grasping an object! Won't try grasping again.");
+//      world_state_mutex->unlock();
+//      paramServer.reinsert_obstacles(move_group);
+//      result_.success = false;
+//      return false;
+//    }
 
     for (int n = 0; n < (int)world_state->observed_objects.size(); ++n) {
-      int max_layer_index = 0;
+        int max_layer_index = 0;
       if (world_state->observed_objects[n].x == world_state->robot_state.x &&
           world_state->observed_objects[n].y == world_state->robot_state.y) {
         for (int m = 0; m < (int)world_state->observed_objects.size(); ++m) {
@@ -156,48 +124,56 @@ public:
                  world_state->observed_objects[n].x,
                  world_state->observed_objects[n].y,
                  world_state->observed_objects[n].name.c_str());
+
+        movement_action_mutex->lock();
+        mover->move_from_buffer();
+        movement_action_mutex->unlock();
+
         open_gripper();
-        go_down(world_state->observed_objects[max_layer_index].layer);
+        //go_down(world_state->observed_objects[0].layer);
+        //go_down(world_state->observed_objects[max_layer_index].layer);
+        go_down(0);
         close_gripper();
+
+        // deposit in inventory
         go_up();
+        mover->move_to_inventory();
+        go_down(0);
+        open_gripper();
+        go_up();
+        mover->return_from_inventory();
+
         world_state->robot_state.grasping = true;
         world_state->robot_state.current_grasp =
             world_state->observed_objects[n].name;
         world_state->observed_objects[n].grasped = true;
         world_state_mutex->unlock();
-        if (!do_not_connect)
-          paramServer.reinsert_obstacles(move_group);
+        paramServer.reinsert_obstacles(move_group);
         feedback_.worldstate = *world_state;
         result_.success = true;
         ROS_INFO("Grabbed!");
         return true;
       }
     }
-    world_state_mutex->unlock();
-
-    if (!do_not_connect)
-      paramServer.reinsert_obstacles(move_group);
     result_.success = false;
     ROS_INFO("You tried grasping at a point where there was nothing to grasp!");
-    return false;
+    ROS_INFO("You were at [%f, %f]", world_state->robot_state.x, world_state->robot_state.y);
+
+    world_state_mutex->unlock();
+
+    paramServer.reinsert_obstacles(move_group);
+        return false;
   }
 
   bool attempt_release() {
-    if (!do_not_connect)
-      paramServer.remove_obstacles();
-    if (!move_group_attached) {
-        ROS_ERROR("move group not attached to this class! cannot continue.");
-        return false;
-    }
-
+    paramServer.remove_obstacles();
     world_state_mutex->lock();
     feedback_.worldstate = *world_state;
     if (!world_state->robot_state.grasping) {
       ROS_INFO("You're not grasping any object! Nothing to try to release.");
       world_state_mutex->unlock();
       result_.success = false;
-      if (!do_not_connect)
-        paramServer.reinsert_obstacles(move_group);
+      paramServer.reinsert_obstacles(move_group);
       return false;
     }
 
@@ -213,7 +189,12 @@ public:
             layer++;
         }
 
-        go_down(layer);
+        movement_action_mutex->lock();
+        mover->move_from_buffer();
+        movement_action_mutex->unlock();
+
+        //go_down(layer);
+        go_down(0);
         open_gripper();
         go_up();
 
@@ -224,16 +205,14 @@ public:
         feedback_.worldstate = *world_state;
         result_.success = true;
         world_state_mutex->unlock();
-        if (!do_not_connect)
-          paramServer.reinsert_obstacles(move_group);
+        paramServer.reinsert_obstacles(move_group);
         ROS_INFO("Released!");
         return true;
       }
     }
 
     world_state_mutex->unlock();
-    if (!do_not_connect)
-      paramServer.reinsert_obstacles(move_group);
+    paramServer.reinsert_obstacles(move_group);
     result_.success = false;
     return false;
   }
@@ -249,8 +228,6 @@ public:
   }
 
   void go_down(int layer) {
-    if (do_not_connect)
-      return;
     layer += 1;
     double layer_height = paramServer.get_layer_height();
     double table_height = paramServer.get_table_height();
@@ -265,8 +242,6 @@ public:
   }
 
   void go_up() {
-    if (do_not_connect)
-      return;
     double table_height = paramServer.get_table_height();
     double layer_height = paramServer.get_layer_height();
     double layer_count = paramServer.get_layer_count();
@@ -281,8 +256,6 @@ public:
   }
 
   bool move_to_position(double position) {
-    if (do_not_connect)
-      return true;
     if (!gripper_client.isServerConnected()) {
       ROS_INFO("[FetchGripper] waitForServer...");
       gripper_client.waitForServer();

@@ -40,25 +40,11 @@ protected:
   BoundingBox bounding_box;
   ros::NodeHandle nh;
   moveit::planning_interface::PlanningSceneInterface planning_scene_interface;
-  bool do_not_connect;
-
-private:
-  void constructor(ros::NodeHandle nh_) {
-    this->nh = nh_;
-    bounding_box = get_bounding_box();
-  }
 
 public:
-  DiscretizedMovementParamServer() {}
-
   DiscretizedMovementParamServer(ros::NodeHandle nh_) {
-    constructor(nh_);
-    do_not_connect = get_do_not_connect();
-  }
-
-  DiscretizedMovementParamServer(ros::NodeHandle nh_, bool do_not_connect_) {
-    constructor(nh_);
-    do_not_connect = do_not_connect_;
+    this->nh = nh_;
+    bounding_box = get_bounding_box();
   }
 
   ~DiscretizedMovementParamServer() {}
@@ -154,13 +140,6 @@ public:
     return returnme;
   }
 
-  bool get_do_not_connect() {
-    bool returnme = false;
-    if (nh.hasParam(ROSPARAM_NAME_DO_NOT_CONNECT))
-      nh.getParam(ROSPARAM_NAME_DO_NOT_CONNECT, returnme);
-    return returnme;
-  }
-
   std::pair<geometry_msgs::Pose, shape_msgs::SolidPrimitive> get_obstacle(std::string obstacle) {
     BoundingBox bb = get_bounding_box();
     shape_msgs::SolidPrimitive primitive;
@@ -221,8 +200,7 @@ public:
         std::vector<moveit_msgs::CollisionObject> vec;
         vec.push_back(get_table_obstacle(*move_group));
         vec.push_back(get_obstacle_obstacle(*move_group));
-        if (!do_not_connect)
-            planning_scene_interface.addCollisionObjects(vec);
+        planning_scene_interface.addCollisionObjects(vec);
 
   }
 
@@ -230,30 +208,26 @@ public:
       std::vector<std::string> vec;
       vec.push_back("obstacle_layer");
       vec.push_back("table");
-      if (!do_not_connect)
-          planning_scene_interface.removeCollisionObjects(vec);
+      planning_scene_interface.removeCollisionObjects(vec);
   }
 
   void reinsert_obstacles(moveit::planning_interface::MoveGroupInterface *move_group) {
       std::vector<moveit_msgs::CollisionObject> vec;
       vec.push_back(get_obstacle_obstacle(*move_group));
       vec.push_back(get_table_obstacle(*move_group));
-      if (!do_not_connect)
-          planning_scene_interface.addCollisionObjects(vec);
+      planning_scene_interface.addCollisionObjects(vec);
   }
 
   void remove_obstacle_obstacle() {
       std::vector<std::string> vec;
       vec.push_back("obstacle_layer");
-      if (!do_not_connect)
-          planning_scene_interface.removeCollisionObjects(vec);
+      planning_scene_interface.removeCollisionObjects(vec);
   }
 
   void reinsert_obstacle_obstacle(moveit::planning_interface::MoveGroupInterface *move_group) {
       std::vector<moveit_msgs::CollisionObject> vec;
       vec.push_back(get_obstacle_obstacle(*move_group));
-      if (!do_not_connect)
-          planning_scene_interface.addCollisionObjects(vec);
+      planning_scene_interface.addCollisionObjects(vec);
   }
 
 };

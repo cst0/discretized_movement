@@ -1,4 +1,4 @@
-- {name: agent,          x: 5, y: 5}
-- {name: cube1,          x: 3, y: 4}
-- {name: cube2,          x: 4, y: 7}
-- {name: crafting_table, x: 2, y: 2}
+- {name: agent          , x: 5 , y: 5}
+- {name: cube1          , x: 4 , y: 9}
+- {name: cube2          , x: 6 , y: 3}
+- {name: crafting_table , x: 2 , y: 6}

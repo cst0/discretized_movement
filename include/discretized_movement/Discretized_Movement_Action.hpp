@@ -43,52 +43,17 @@ protected:
   BoundingBox bounds;
   int grid_steps_x, grid_steps_y;
   int current_x_coord, current_y_coord;
-  geometry_msgs::Pose ee_start_pose;
+  int start_x_coord, start_y_coord;
+  geometry_msgs::Pose inventory_return_pose;
+  float ee_start_x, ee_start_y, ee_start_z;
+  float inventory_x, inventory_y;
 
   std::mutex *world_state_mutex;
   discretized_movement::worldstate *world_state;
   moveit::planning_interface::MoveGroupInterface *move_group;
   moveit::planning_interface::PlanningSceneInterface planning_scene_interface;
 
-  DiscretizedMovementParamServer paramServer;
-
-  bool do_not_connect;
-  bool move_group_attached = false;
-
-private:
-  void common_constructor(std::mutex &m,
-                          discretized_movement::worldstate &world_state_) {
-    bounds = paramServer.get_bounding_box();
-    world_state_mutex = &m;
-    world_state = &world_state_;
-
-    grid_steps_x = 10;
-    grid_steps_y = 10;
-    current_x_coord = world_state->robot_state.x;
-    current_y_coord = world_state->robot_state.y;
-  }
-
 public:
-  Discretized_Movement_Action(std::string name, ros::NodeHandle nh,
-                              std::mutex &m,
-                              discretized_movement::worldstate &world_state_)
-      : MoveActionServer_(
-            nh, name,
-            boost::bind(&Discretized_Movement_Action::execute, this, _1),
-            false),
-        paramServer(nh) {
-    do_not_connect = paramServer.get_do_not_connect();
-    if (!do_not_connect) {
-      ROS_ERROR("You have the 'do_not_connect' parameter set to false, but "
-                "you're using the constructor that doesn't connect to the "
-                "move_group... overriding this parameter.");
-      do_not_connect = true;
-    }
-
-    common_constructor(m, world_state_);
-    MoveActionServer_.start();
-  }
-
   Discretized_Movement_Action(
       std::string name, ros::NodeHandle nh,
       moveit::planning_interface::MoveGroupInterface &move_group_,
@@ -96,16 +61,32 @@ public:
       : MoveActionServer_(
             nh, name,
             boost::bind(&Discretized_Movement_Action::execute, this, _1),
-            false),
-        paramServer(nh) {
+            false) {
 
+    DiscretizedMovementParamServer paramServer(nh);
+    bounds = paramServer.get_bounding_box();
+    grid_steps_x = 10;
+    grid_steps_y = 10;
+    start_x_coord = 5;
+    start_y_coord = 5;
+    current_x_coord = start_x_coord;
+    current_y_coord = start_y_coord;
+
+    world_state_mutex = &m;
+    world_state = &world_state_;
+
+    // basic init stuff
     move_group = &move_group_;
-    move_group_attached = true;
-    ee_start_pose = move_group->getCurrentPose().pose;
+    //ee_start_pose = move_group->getCurrentPose().pose;
+    ee_start_x = 0.6;
+    ee_start_y = 0.0;
+    ee_start_z = 1.074;
+
+    inventory_x = 0.6;
+    inventory_y = 0.35;
 
     paramServer.insert_obstacle(move_group);
 
-    common_constructor(m, world_state_);
     MoveActionServer_.start();
   }
 
@@ -139,57 +120,52 @@ public:
       return;
     }
 
-    double goal_x =
-        (goal_coord_x * bounds.step_size_x) + ee_start_pose.position.x;
-    double goal_y =
-        (goal_coord_y * bounds.step_size_y) + ee_start_pose.position.y;
+    //ROS_INFO("%f, %d, %f, %f", goal_y, goal_coord_y, bounds.step_size_y, ee_start_pose.position.y);
 
-    ROS_INFO("%f, %d, %f, %f", goal_y, goal_coord_y, bounds.step_size_y,
-             ee_start_pose.position.y);
+    world_state_mutex->lock();
 
-    bool success = attempt_move(goal_x, goal_y);
-    if (success) {
+    current_x_coord = goal_coord_x;
+    current_y_coord = goal_coord_y;
+    world_state->robot_state.x = current_x_coord;
+    world_state->robot_state.y = current_y_coord;
 
-      world_state_mutex->lock();
-
-      current_x_coord = goal_coord_x;
-      current_y_coord = goal_coord_y;
-      world_state->robot_state.x = current_x_coord;
-      world_state->robot_state.y = current_y_coord;
-
-      if (world_state->robot_state.grasping) {
-        for (int n = 0; n < (int)world_state->observed_objects.size(); ++n) {
-          if (world_state->observed_objects[n].name ==
-              world_state->robot_state.current_grasp) {
-            world_state->observed_objects[n].x = current_x_coord;
-            world_state->observed_objects[n].y = current_y_coord;
-          }
+    if(world_state->robot_state.grasping) {
+        for (int n = 0; n < (int) world_state->observed_objects.size(); ++n) {
+            if (world_state->observed_objects[n].name == world_state->robot_state.current_grasp) {
+              world_state->observed_objects[n].x = current_x_coord;
+              world_state->observed_objects[n].y = current_y_coord;
+            }
         }
-      }
-
-      feedback_.worldstate = *world_state;
-      result_.success = true;
-
-      world_state_mutex->unlock();
-
-      MoveActionServer_.publishFeedback(feedback_);
-      MoveActionServer_.setSucceeded(result_);
-    } else {
-      MoveActionServer_.setAborted();
     }
+
+    feedback_.worldstate = *world_state;
+    result_.success = true;
+
+    world_state_mutex->unlock();
+
+    MoveActionServer_.publishFeedback(feedback_);
+    MoveActionServer_.setSucceeded(result_);
+  }
+
+  bool move_from_buffer() {
+    double goal_x = ee_start_x + ((current_x_coord-start_x_coord) * bounds.step_size_x);
+        //(goal_coord_x * bounds.step_size_x) + ee_start_pose.position.x;
+    double goal_y = ee_start_y + ((current_y_coord-start_y_coord) * bounds.step_size_y);
+        //(goal_coord_y * bounds.step_size_y) + ee_start_pose.position.y;
+
+    return attempt_move(goal_x, goal_y);
   }
 
   bool attempt_move(double goal_x, double goal_y) {
-    if (do_not_connect)
-      return true;
-    if (!move_group_attached) {
-      ROS_ERROR("move group not attached to this class! cannot continue.");
-      return false;
-    }
-    std::vector<geometry_msgs::Pose> waypoints;
     geometry_msgs::Pose goal_pose = move_group->getCurrentPose().pose;
     goal_pose.position.x = goal_x;
     goal_pose.position.y = goal_y;
+    goal_pose.position.z = ee_start_z;
+
+    goal_pose.orientation.x = -0.003;
+    goal_pose.orientation.y = 0.697;
+    goal_pose.orientation.z = 0.001;
+    goal_pose.orientation.w = 0.7161;
 
     ROS_INFO("Told to go to [%f, %f, %f][%f, %f, %f, %f]", goal_pose.position.x,
              goal_pose.position.y, goal_pose.position.z,
@@ -207,5 +183,39 @@ public:
     }
 
     return success;
+  }
+
+  bool move_to_inventory() {
+    inventory_return_pose = move_group->getCurrentPose().pose;
+    geometry_msgs::Pose inventory_pose = move_group->getCurrentPose().pose;
+
+    // Go above the inventory
+    inventory_pose.position.x = inventory_x;
+    inventory_pose.position.y = inventory_y;
+    move_group->setStartStateToCurrentState();
+    move_group->setPoseTarget(inventory_pose);
+    moveit::planning_interface::MoveGroupInterface::Plan plan_inventory;
+    bool success = (move_group->plan(plan_inventory) ==
+                    moveit::planning_interface::MoveItErrorCode::SUCCESS);
+    if (success) {
+      move_group->move();
+      inventory_x -= 0.075; // this slot is full
+    }
+    return success;
+  }
+
+  bool return_from_inventory() {
+    // Go back to the start
+    move_group->setStartStateToCurrentState();
+    move_group->setPoseTarget(inventory_return_pose);
+    moveit::planning_interface::MoveGroupInterface::Plan plan_start;
+    bool success = (move_group->plan(plan_start) ==
+                    moveit::planning_interface::MoveItErrorCode::SUCCESS);
+    if (success) {
+      move_group->move();
+    }
+
+    return success;
+
   }
 };
